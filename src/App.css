@@ -127,8 +127,40 @@
   border-color: #6366f1;
 }
 
+/* ---------- Nav Bar ---------- */
+.nav-bar {
+  display: flex;
+  gap: 8px;
+  padding: 12px 32px;
+  border-bottom: 1px solid #2a2a35;
+}
+
+.nav-link {
+  color: #9ca3af;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 8px 14px;
+  border-radius: 8px;
+}
+
+.nav-link:hover {
+  color: #e4e4e7;
+}
+
+.nav-link.active {
+  color: #f4f4f5;
+  background-color: #1a1a23;
+}
+
 .dashboard-content {
   padding: 32px;
+}
+
+.page-placeholder h2 {
+  color: #f4f4f5;
+  font-size: 20px;
+  font-weight: 600;
 }
 
 .dashboard-content p {

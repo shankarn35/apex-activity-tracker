@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { BrowserRouter } from 'react-router-dom'
 import { supabase } from './supabaseClient'
 import Auth from './Auth'
 import Dashboard from './Dashboard'
@@ -27,7 +28,13 @@ function App() {
 
   return (
     <div className="app">
-      {!session ? <Auth /> : <Dashboard session={session} />}
+      {!session ? (
+        <Auth />
+      ) : (
+        <BrowserRouter>
+          <Dashboard session={session} />
+        </BrowserRouter>
+      )}
     </div>
   )
 }

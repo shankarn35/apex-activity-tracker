@@ -1,4 +1,10 @@
+import { Routes, Route, Navigate } from 'react-router-dom'
 import { supabase } from './supabaseClient'
+import NavBar from './NavBar'
+import Tasks from './pages/Tasks'
+import Calendar from './pages/Calendar'
+import Bills from './pages/Bills'
+import Hobbies from './pages/Hobbies'
 
 export default function Dashboard({ session }) {
   const handleLogout = async () => {
@@ -14,12 +20,19 @@ export default function Dashboard({ session }) {
         </button>
       </header>
 
+      <NavBar />
+
       <div className="dashboard-content">
         <p>Logged in as: {session.user.email}</p>
-        <p className="placeholder-note">
-          This is a placeholder dashboard confirming login works end-to-end.
-          Tasks, Calendar, Bills, and Hobbies modules come next.
-        </p>
+
+        <Routes>
+          <Route path="/" element={<Navigate to="/tasks" replace />} />
+          <Route path="/tasks" element={<Tasks />} />
+          <Route path="/calendar" element={<Calendar />} />
+          <Route path="/bills" element={<Bills />} />
+          <Route path="/hobbies" element={<Hobbies />} />
+          <Route path="*" element={<Navigate to="/tasks" replace />} />
+        </Routes>
       </div>
     </div>
   )
