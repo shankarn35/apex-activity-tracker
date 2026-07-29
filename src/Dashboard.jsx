@@ -14,7 +14,7 @@ export default function Dashboard({ session }) {
   return (
     <div className="dashboard">
       <header className="dashboard-header">
-        <h1>APEX Activity Tracker</h1>
+        <h1>ShaanKriya</h1>
         <button className="logout-button" onClick={handleLogout}>
           Log Out
         </button>
@@ -27,7 +27,7 @@ export default function Dashboard({ session }) {
 
         <Routes>
           <Route path="/" element={<Navigate to="/tasks" replace />} />
-          <Route path="/tasks" element={<Tasks />} />
+          <Route path="/tasks" element={<Tasks session={session} />} />
           <Route path="/calendar" element={<Calendar />} />
           <Route path="/bills" element={<Bills />} />
           <Route path="/hobbies" element={<Hobbies />} />

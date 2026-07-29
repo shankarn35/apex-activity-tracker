@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { supabase } from './supabaseClient'
+import ThemeToggle from './components/ThemeToggle'
 
 export default function Auth() {
   const [email, setEmail] = useState('')
@@ -32,7 +33,10 @@ export default function Auth() {
   return (
     <div className="auth-container">
       <div className="auth-box">
-        <h1>APEX Activity Tracker</h1>
+        <div className="auth-box-header">
+          <h1>ShaanKriya</h1>
+          <ThemeToggle />
+        </div>
         <p className="auth-subtitle">{isSignUp ? 'Create your account' : 'Sign in to continue'}</p>
 
         <form onSubmit={handleSubmit}>
