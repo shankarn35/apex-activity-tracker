@@ -40,3 +40,7 @@ Before ending a session, confirm with the user:
 1. All changes committed and pushed to origin/main
 2. Any schema/behavior changes summarized for the user to log in project memory
 3. Time spent this session, for the user to log
+
+## Long-running or interrupted commands
+- If a git (or other shell) command seems to be taking unusually long, don't just keep waiting silently — flag it explicitly to the user (e.g. "this is taking longer than expected, want me to check status, or have you already run it manually?").
+- If the user interrupts a running tool call, don't assume they've called off the task — they may be troubleshooting or completing it outside the session. Check in on what actually happened (e.g. `git status`, `git log origin/main -1`) before deciding what to do next, rather than treating the interruption as a rejection.
