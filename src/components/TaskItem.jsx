@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { format } from 'date-fns'
 import { formatRuleSummary, today } from '../lib/recurrence'
 
-export default function TaskItem({ task, onComplete, onEditRecurrence }) {
+export default function TaskItem({ task, onComplete, onEditRecurrence, showPriority }) {
   const [confirming, setConfirming] = useState(false)
   const [completedOn, setCompletedOn] = useState(today())
   const popoverRef = useRef(null)
@@ -71,7 +71,12 @@ export default function TaskItem({ task, onComplete, onEditRecurrence }) {
         )}
       </div>
 
-      <span className={`priority-dot priority-${task.priority}`} />
+      {showPriority && (
+        <>
+          <span className={`priority-dot priority-${task.priority}`} />
+          <span className="task-item-priority-label">{task.priority}</span>
+        </>
+      )}
 
       <span className="task-item-title">{task.title}</span>
 

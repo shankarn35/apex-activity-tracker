@@ -18,6 +18,13 @@ function sortByDueDate(tasks) {
   })
 }
 
+const SHOW_PRIORITY_STORAGE_KEY = 'showPriority'
+
+function readStoredShowPriority() {
+  const stored = localStorage.getItem(SHOW_PRIORITY_STORAGE_KEY)
+  return stored === null ? true : stored === 'true'
+}
+
 function findEndDatePassedTasks(tasks) {
   const todayStr = today()
   return tasks.filter(
@@ -36,6 +43,15 @@ export default function Tasks({ session }) {
   const [editingTask, setEditingTask] = useState(null)
   const [pendingEndDateTasks, setPendingEndDateTasks] = useState([])
   const [endDatePromptMode, setEndDatePromptMode] = useState(null)
+  const [showPriority, setShowPriority] = useState(readStoredShowPriority)
+
+  const toggleShowPriority = () => {
+    setShowPriority((prev) => {
+      const next = !prev
+      localStorage.setItem(SHOW_PRIORITY_STORAGE_KEY, String(next))
+      return next
+    })
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -192,7 +208,17 @@ export default function Tasks({ session }) {
 
   return (
     <div className="page-placeholder tasks-page">
-      <h2>Tasks</h2>
+      <div className="tasks-page-header">
+        <h2>Tasks</h2>
+        <label className="show-priority-toggle">
+          <input
+            type="checkbox"
+            checked={showPriority}
+            onChange={toggleShowPriority}
+          />
+          Show priority
+        </label>
+      </div>
 
       <TaskForm userId={session.user.id} onCreated={handleCreated} />
 
@@ -210,12 +236,13 @@ export default function Tasks({ session }) {
               task={task}
               onComplete={handleComplete}
               onEditRecurrence={setEditingTask}
+              showPriority={showPriority}
             />
           ))}
         </ul>
       )}
 
-      <CompletedHistory userId={session.user.id} />
+      <CompletedHistory userId={session.user.id} showPriority={showPriority} />
 
       {editingTask && (
         <EditRecurrenceModal

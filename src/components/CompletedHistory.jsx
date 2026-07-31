@@ -11,7 +11,7 @@ function parseDateOnly(dateStr) {
   return new Date(`${dateStr}T00:00:00`)
 }
 
-export default function CompletedHistory({ userId }) {
+export default function CompletedHistory({ userId, showPriority }) {
   const [expanded, setExpanded] = useState(false)
   const [fromDate, setFromDate] = useState(defaultFromDate())
   const [items, setItems] = useState([])
@@ -85,9 +85,13 @@ export default function CompletedHistory({ userId }) {
                 const dueLabel = item.due_date ?? item.occurrence_date
                 return (
                   <li key={item.id} className="task-item task-item-completed">
-                    <span className={`priority-dot priority-${item.priority}`} />
+                    {showPriority && (
+                      <>
+                        <span className={`priority-dot priority-${item.priority}`} />
+                        <span className="task-item-priority-label">{item.priority}</span>
+                      </>
+                    )}
                     <span className="task-item-title">{item.title}</span>
-                    <span className="task-item-priority-label">{item.priority}</span>
                     {item.parent_task_id && (
                       <span className="task-item-recurring-badge">recurring</span>
                     )}

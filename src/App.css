@@ -206,8 +206,24 @@
 }
 
 /* ---------- Tasks Page ---------- */
-.tasks-page h2 {
+.tasks-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   margin-bottom: 20px;
+}
+
+.tasks-page-header h2 {
+  margin-bottom: 0;
+}
+
+.show-priority-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-text-muted);
+  font-size: 13px;
+  cursor: pointer;
 }
 
 .task-form {
