@@ -29,3 +29,14 @@ This is an early-stage React 19 + Vite app with Supabase as the backend (auth + 
 - **Dashboard**: `src/Dashboard.jsx` currently just confirms the logged-in session and exposes sign-out; this is the extension point for upcoming feature modules.
 
 `zustand`, `recharts`, `date-fns`, and `lucide-react` are already dependencies but not yet used in code — they're there for the planned modules (state management, charts, date handling, icons respectively).
+
+## Commit conventions
+- After each individually-tested feature, propose a commit to the user — never batch multiple untested features into one commit, and never commit until the user approves.
+- Prefix commit messages by type: feat:, fix:, refactor:, chore:, docs:
+- Show `git diff` for review before committing.
+
+## End-of-session checklist
+Before ending a session, confirm with the user:
+1. All changes committed and pushed to origin/main
+2. Any schema/behavior changes summarized for the user to log in project memory
+3. Time spent this session, for the user to log
