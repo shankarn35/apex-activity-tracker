@@ -242,7 +242,11 @@ export default function Tasks({ session }) {
         </ul>
       )}
 
-      <CompletedHistory userId={session.user.id} showPriority={showPriority} />
+      <CompletedHistory
+        userId={session.user.id}
+        showPriority={showPriority}
+        onToggleShowPriority={toggleShowPriority}
+      />
 
       {editingTask && (
         <EditRecurrenceModal
