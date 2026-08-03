@@ -181,9 +181,25 @@ export default function CompletedHistory({
 
         if (deleteError) throw deleteError
 
+        const { data: template, error: templateFetchError } = await supabase
+          .from('tasks')
+          .select('due_date')
+          .eq('id', item.parent_task_id)
+          .single()
+
+        if (templateFetchError) throw templateFetchError
+
+        // Undoing must only ever move due_date backward -- an out-of-order
+        // undo (e.g. undoing an earlier date after a later one is already
+        // undone) must not clobber that earlier, still-outstanding gap.
+        const newDueDate =
+          template.due_date === null || item.occurrence_date < template.due_date
+            ? item.occurrence_date
+            : template.due_date
+
         const { data, error } = await supabase
           .from('tasks')
-          .update({ due_date: item.occurrence_date, recurrence_active: true })
+          .update({ due_date: newDueDate, recurrence_active: true })
           .eq('id', item.parent_task_id)
           .select()
           .single()
