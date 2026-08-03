@@ -31,6 +31,8 @@ function parseDateOnly(dateStr) {
   return new Date(`${dateStr}T00:00:00`)
 }
 
+const DEFAULT_VISIBLE_COUNT = 10
+
 const DEFAULT_UNDO_MESSAGE = 'Undo this completion?'
 const REACTIVATE_UNDO_MESSAGE =
   'This will also reactivate the recurring series (currently stopped). Continue?'
@@ -50,6 +52,7 @@ export default function CompletedHistory({
   const [fields, setFields] = useState(readStoredFields)
   const [fieldsMenuOpen, setFieldsMenuOpen] = useState(false)
   const fieldsMenuRef = useRef(null)
+  const [showAll, setShowAll] = useState(false)
 
   const [undoTarget, setUndoTarget] = useState(null)
   const [undoMessage, setUndoMessage] = useState(DEFAULT_UNDO_MESSAGE)
@@ -189,7 +192,7 @@ export default function CompletedHistory({
 
         if (templateFetchError) throw templateFetchError
 
-        // Undoing must only ever move due_date backward -- an out-of-order
+        // Undoing must only ever move due_date backward — an out-of-order
         // undo (e.g. undoing an earlier date after a later one is already
         // undone) must not clobber that earlier, still-outstanding gap.
         const newDueDate =
@@ -232,14 +235,27 @@ export default function CompletedHistory({
       {expanded && (
         <div className="completed-history-body">
           <div className="completed-history-controls">
-            <label className="completed-history-from">
-              Show from
-              <input
-                type="date"
-                value={fromDate}
-                onChange={(e) => setFromDate(e.target.value)}
-              />
-            </label>
+            <div className="completed-history-scope">
+              <label className="completed-history-from">
+                Show from
+                <input
+                  type="date"
+                  value={fromDate}
+                  onChange={(e) => setFromDate(e.target.value)}
+                />
+              </label>
+
+              {items.length > DEFAULT_VISIBLE_COUNT && (
+                <label className="show-all-toggle">
+                  <input
+                    type="checkbox"
+                    checked={showAll}
+                    onChange={() => setShowAll((prev) => !prev)}
+                  />
+                  Show all
+                </label>
+              )}
+            </div>
 
             <div className="completed-history-fields-control">
               <button
@@ -290,8 +306,17 @@ export default function CompletedHistory({
           ) : items.length === 0 ? (
             <p className="placeholder-note">No completions in this range.</p>
           ) : (
-            <ul className="task-list">
-              {items.map((item) => {
+            <>
+              {items.length > DEFAULT_VISIBLE_COUNT && (
+                <p className="placeholder-note completed-history-count-note">
+                  {showAll
+                    ? `Showing all ${items.length} (within ${format(parseDateOnly(fromDate), 'MMM d')} – today).`
+                    : `Showing ${DEFAULT_VISIBLE_COUNT} most recent (within ${format(parseDateOnly(fromDate), 'MMM d')} – today) — ${items.length - DEFAULT_VISIBLE_COUNT} more available.`}
+                </p>
+              )}
+
+              <ul className="task-list">
+              {(showAll ? items : items.slice(0, DEFAULT_VISIBLE_COUNT)).map((item) => {
                 const dueLabel = item.due_date ?? item.occurrence_date
                 return (
                   <li key={item.id} className="task-item task-item-completed">
@@ -356,7 +381,8 @@ export default function CompletedHistory({
                   </li>
                 )
               })}
-            </ul>
+              </ul>
+            </>
           )}
         </div>
       )}

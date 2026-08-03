@@ -350,11 +350,32 @@
   gap: 14px;
 }
 
+.completed-history-count-note {
+  margin-top: -6px;
+}
+
+.show-all-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-text-muted);
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
 .completed-history-controls {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+}
+
+.completed-history-scope {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
 }
 
 .completed-history-from {
