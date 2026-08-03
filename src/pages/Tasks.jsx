@@ -44,6 +44,7 @@ export default function Tasks({ session }) {
   const [pendingEndDateTasks, setPendingEndDateTasks] = useState([])
   const [endDatePromptMode, setEndDatePromptMode] = useState(null)
   const [showPriority, setShowPriority] = useState(readStoredShowPriority)
+  const [lastCompletedItem, setLastCompletedItem] = useState(null)
 
   const toggleShowPriority = () => {
     setShowPriority((prev) => {
@@ -101,29 +102,38 @@ export default function Tasks({ session }) {
 
     try {
       if (!task.is_recurring) {
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from('tasks')
           .update({ completed: true, completed_at: completedAt })
           .eq('id', task.id)
+          .select()
+          .single()
 
         if (error) throw error
 
         setTasks((prev) => prev.filter((t) => t.id !== task.id))
+        setLastCompletedItem(data)
         return
       }
 
-      const { error: occurrenceError } = await supabase.from('tasks').insert({
-        user_id: task.user_id,
-        parent_task_id: task.id,
-        occurrence_date: task.due_date,
-        title: task.title,
-        priority: task.priority,
-        completed: true,
-        completed_at: completedAt,
-        is_recurring: false,
-      })
+      const { data: occurrence, error: occurrenceError } = await supabase
+        .from('tasks')
+        .insert({
+          user_id: task.user_id,
+          parent_task_id: task.id,
+          occurrence_date: task.due_date,
+          title: task.title,
+          priority: task.priority,
+          completed: true,
+          completed_at: completedAt,
+          is_recurring: false,
+        })
+        .select()
+        .single()
 
       if (occurrenceError) throw occurrenceError
+
+      setLastCompletedItem(occurrence)
 
       const excludedDates = await fetchOccurrenceDates(task.id)
       const nextDueDate = advanceDate(
@@ -154,6 +164,16 @@ export default function Tasks({ session }) {
     } catch (err) {
       setError(friendlyErrorMessage(err))
     }
+  }
+
+  const handleUncomplete = (restoredTask) => {
+    setTasks((prev) => {
+      const exists = prev.some((t) => t.id === restoredTask.id)
+      const next = exists
+        ? prev.map((t) => (t.id === restoredTask.id ? restoredTask : t))
+        : [...prev, restoredTask]
+      return sortByDueDate(next)
+    })
   }
 
   const handleRecurrenceSaved = (updatedTask) => {
@@ -246,6 +266,8 @@ export default function Tasks({ session }) {
         userId={session.user.id}
         showPriority={showPriority}
         onToggleShowPriority={toggleShowPriority}
+        onUncomplete={handleUncomplete}
+        newlyCompletedItem={lastCompletedItem}
       />
 
       {editingTask && (

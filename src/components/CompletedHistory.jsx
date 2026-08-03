@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { format, subDays } from 'date-fns'
 import { Settings } from 'lucide-react'
 import { supabase } from '../supabaseClient'
+import { fetchRecurrenceActive } from '../lib/occurrences'
 import { friendlyErrorMessage } from '../lib/errors'
 
 const FIELDS_STORAGE_KEY = 'completedHistoryFields'
@@ -30,7 +31,17 @@ function parseDateOnly(dateStr) {
   return new Date(`${dateStr}T00:00:00`)
 }
 
-export default function CompletedHistory({ userId, showPriority, onToggleShowPriority }) {
+const DEFAULT_UNDO_MESSAGE = 'Undo this completion?'
+const REACTIVATE_UNDO_MESSAGE =
+  'This will also reactivate the recurring series (currently stopped). Continue?'
+
+export default function CompletedHistory({
+  userId,
+  showPriority,
+  onToggleShowPriority,
+  onUncomplete,
+  newlyCompletedItem,
+}) {
   const [expanded, setExpanded] = useState(false)
   const [fromDate, setFromDate] = useState(defaultFromDate())
   const [items, setItems] = useState([])
@@ -39,6 +50,12 @@ export default function CompletedHistory({ userId, showPriority, onToggleShowPri
   const [fields, setFields] = useState(readStoredFields)
   const [fieldsMenuOpen, setFieldsMenuOpen] = useState(false)
   const fieldsMenuRef = useRef(null)
+
+  const [undoTarget, setUndoTarget] = useState(null)
+  const [undoMessage, setUndoMessage] = useState(DEFAULT_UNDO_MESSAGE)
+  const [undoChecking, setUndoChecking] = useState(false)
+  const [undoSubmitting, setUndoSubmitting] = useState(false)
+  const undoPopoverRef = useRef(null)
 
   useEffect(() => {
     if (!expanded) return
@@ -73,6 +90,16 @@ export default function CompletedHistory({ userId, showPriority, onToggleShowPri
     }
   }, [expanded, fromDate, userId])
 
+  const [seenCompletedItem, setSeenCompletedItem] = useState(newlyCompletedItem)
+  if (newlyCompletedItem && newlyCompletedItem !== seenCompletedItem) {
+    setSeenCompletedItem(newlyCompletedItem)
+    if (newlyCompletedItem.completed_at >= `${fromDate}T00:00:00`) {
+      setItems((prev) =>
+        [...prev, newlyCompletedItem].sort((a, b) => b.completed_at.localeCompare(a.completed_at))
+      )
+    }
+  }
+
   useEffect(() => {
     if (!fieldsMenuOpen) return
 
@@ -86,12 +113,93 @@ export default function CompletedHistory({ userId, showPriority, onToggleShowPri
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [fieldsMenuOpen])
 
+  useEffect(() => {
+    if (!undoTarget) return
+
+    function handleClickOutside(e) {
+      if (undoPopoverRef.current && !undoPopoverRef.current.contains(e.target)) {
+        setUndoTarget(null)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [undoTarget])
+
   const toggleField = (key) => {
     setFields((prev) => {
       const next = { ...prev, [key]: !prev[key] }
       localStorage.setItem(FIELDS_STORAGE_KEY, JSON.stringify(next))
       return next
     })
+  }
+
+  const openUndoConfirm = async (item) => {
+    setError('')
+    setUndoTarget(item)
+    setUndoMessage(DEFAULT_UNDO_MESSAGE)
+
+    if (!item.parent_task_id) return
+
+    setUndoChecking(true)
+    try {
+      const active = await fetchRecurrenceActive(item.parent_task_id)
+      if (!active) {
+        setUndoMessage(REACTIVATE_UNDO_MESSAGE)
+      }
+    } catch (err) {
+      setError(friendlyErrorMessage(err))
+      setUndoTarget(null)
+    } finally {
+      setUndoChecking(false)
+    }
+  }
+
+  const confirmUndo = async () => {
+    const item = undoTarget
+    setUndoSubmitting(true)
+    setError('')
+
+    try {
+      let restoredTask
+
+      if (!item.parent_task_id) {
+        const { data, error } = await supabase
+          .from('tasks')
+          .update({ completed: false, completed_at: null })
+          .eq('id', item.id)
+          .select()
+          .single()
+
+        if (error) throw error
+        restoredTask = data
+      } else {
+        const { error: deleteError } = await supabase
+          .from('tasks')
+          .delete()
+          .eq('id', item.id)
+
+        if (deleteError) throw deleteError
+
+        const { data, error } = await supabase
+          .from('tasks')
+          .update({ due_date: item.occurrence_date, recurrence_active: true })
+          .eq('id', item.parent_task_id)
+          .select()
+          .single()
+
+        if (error) throw error
+        restoredTask = data
+      }
+
+      setItems((prev) => prev.filter((i) => i.id !== item.id))
+      onUncomplete(restoredTask)
+      setUndoTarget(null)
+    } catch (err) {
+      setError(friendlyErrorMessage(err))
+    } finally {
+      setUndoSubmitting(false)
+    }
   }
 
   return (
@@ -191,6 +299,44 @@ export default function CompletedHistory({ userId, showPriority, onToggleShowPri
                     <span className="task-item-due-date">
                       Completed {format(new Date(item.completed_at), 'MMM d, yyyy')}
                     </span>
+
+                    <div className="task-item-undo-control">
+                      <button
+                        type="button"
+                        className="task-item-undo-button"
+                        onClick={() => openUndoConfirm(item)}
+                      >
+                        Undo
+                      </button>
+
+                      {undoTarget?.id === item.id && (
+                        <div className="undo-popover" ref={undoPopoverRef}>
+                          {undoChecking ? (
+                            <p className="placeholder-note">Checking...</p>
+                          ) : (
+                            <>
+                              <p className="undo-popover-message">{undoMessage}</p>
+                              <div className="complete-popover-actions">
+                                <button
+                                  type="button"
+                                  className="modal-secondary-button"
+                                  onClick={() => setUndoTarget(null)}
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={confirmUndo}
+                                  disabled={undoSubmitting}
+                                >
+                                  {undoSubmitting ? 'Undoing...' : 'Confirm'}
+                                </button>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </li>
                 )
               })}
