@@ -1,8 +1,16 @@
 import { useState, useRef, useEffect } from 'react'
 import { format } from 'date-fns'
 import { formatRuleSummary, today } from '../lib/recurrence'
+import { categoryTint } from '../lib/categories'
 
-export default function TaskItem({ task, onComplete, onEditRecurrence, showPriority }) {
+export default function TaskItem({
+  task,
+  onComplete,
+  onEditRecurrence,
+  showPriority,
+  categories,
+}) {
+  const category = categories.find((c) => c.id === task.category_id)
   const [confirming, setConfirming] = useState(false)
   const [completedOn, setCompletedOn] = useState(today())
   const popoverRef = useRef(null)
@@ -79,6 +87,19 @@ export default function TaskItem({ task, onComplete, onEditRecurrence, showPrior
       )}
 
       <span className="task-item-title">{task.title}</span>
+
+      {category && (
+        <span
+          className="task-item-category-badge"
+          style={{
+            backgroundColor: categoryTint(category.color),
+            color: category.color,
+            borderColor: category.color,
+          }}
+        >
+          {category.name}
+        </span>
+      )}
 
       {task.is_recurring && (
         <span className="task-item-recurring-badge">

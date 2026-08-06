@@ -244,6 +244,16 @@
   flex-wrap: wrap;
 }
 
+.task-form-add-category {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.task-form-add-category input[type='text'] {
+  width: 160px;
+}
+
 .task-form input[type='text'],
 .task-form input[type='date'],
 .task-form select {
@@ -442,6 +452,57 @@
   cursor: pointer;
 }
 
+.manage-categories-control {
+  position: relative;
+}
+
+.manage-categories-menu {
+  width: 260px;
+  white-space: normal;
+}
+
+.manage-categories-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.manage-categories-row-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.manage-categories-name {
+  flex: 1;
+  color: var(--color-text);
+  font-size: 13px;
+}
+
+.category-color-swatch {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid var(--color-border);
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.category-color-options {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.manage-categories-delete-confirm {
+  margin-top: 8px;
+  padding: 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+}
+
 .task-item {
   display: flex;
   align-items: center;
@@ -489,6 +550,15 @@
   border-radius: 999px;
   padding: 2px 10px;
   white-space: nowrap;
+}
+
+.task-item-category-badge {
+  font-size: 12px;
+  border: 1px solid;
+  border-radius: 999px;
+  padding: 2px 10px;
+  white-space: nowrap;
+  font-weight: 600;
 }
 
 .task-item-edit-recurrence {

@@ -3,6 +3,7 @@ import { format, subDays } from 'date-fns'
 import { Settings } from 'lucide-react'
 import { supabase } from '../supabaseClient'
 import { fetchRecurrenceActive } from '../lib/occurrences'
+import { categoryTint } from '../lib/categories'
 import { friendlyErrorMessage } from '../lib/errors'
 
 const FIELDS_STORAGE_KEY = 'completedHistoryFields'
@@ -43,6 +44,7 @@ export default function CompletedHistory({
   onToggleShowPriority,
   onUncomplete,
   newlyCompletedItem,
+  categories,
 }) {
   const [expanded, setExpanded] = useState(false)
   const [fromDate, setFromDate] = useState(defaultFromDate())
@@ -318,6 +320,7 @@ export default function CompletedHistory({
               <ul className="task-list">
               {(showAll ? items : items.slice(0, DEFAULT_VISIBLE_COUNT)).map((item) => {
                 const dueLabel = item.due_date ?? item.occurrence_date
+                const category = categories.find((c) => c.id === item.category_id)
                 return (
                   <li key={item.id} className="task-item task-item-completed">
                     {showPriority && (
@@ -327,6 +330,18 @@ export default function CompletedHistory({
                       </>
                     )}
                     <span className="task-item-title">{item.title}</span>
+                    {category && (
+                      <span
+                        className="task-item-category-badge"
+                        style={{
+                          backgroundColor: categoryTint(category.color),
+                          color: category.color,
+                          borderColor: category.color,
+                        }}
+                      >
+                        {category.name}
+                      </span>
+                    )}
                     {fields.recurring && (
                       <span className="task-item-recurring-badge">
                         {item.parent_task_id ? 'recurring' : 'one-time'}

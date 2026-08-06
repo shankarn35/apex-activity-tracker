@@ -1,8 +1,12 @@
 import { useState } from 'react'
 import { supabase } from '../supabaseClient'
 import { nextTemplateSchedule } from '../lib/recurrence'
+import { createCategory, MAX_CATEGORIES } from '../lib/categories'
 import { friendlyErrorMessage } from '../lib/errors'
 import RecurrenceFields from './RecurrenceFields'
+import ManageCategories from './ManageCategories'
+
+const ADD_CATEGORY_VALUE = '__add_custom__'
 
 const DEFAULT_RECURRENCE = {
   type: 'daily',
@@ -31,9 +35,20 @@ function buildRecurrenceRule(recurrence) {
   }
 }
 
-export default function TaskForm({ userId, onCreated }) {
+export default function TaskForm({
+  userId,
+  onCreated,
+  categories,
+  onCategoryCreated,
+  onCategoryDeleted,
+  onCategoryRecolored,
+}) {
   const [title, setTitle] = useState('')
   const [priority, setPriority] = useState('medium')
+  const [categoryId, setCategoryId] = useState('')
+  const [addingCategory, setAddingCategory] = useState(false)
+  const [newCategoryName, setNewCategoryName] = useState('')
+  const [categorySaving, setCategorySaving] = useState(false)
   const [dueDate, setDueDate] = useState('')
   const [isRecurring, setIsRecurring] = useState(false)
   const [recurrence, setRecurrence] = useState(DEFAULT_RECURRENCE)
@@ -41,6 +56,43 @@ export default function TaskForm({ userId, onCreated }) {
   const [message, setMessage] = useState('')
 
   const updateRecurrence = (patch) => setRecurrence((prev) => ({ ...prev, ...patch }))
+
+  // If the currently-selected category is deleted elsewhere (the manage
+  // popover), fall back to "No category" instead of submitting a stale id.
+  const [seenCategories, setSeenCategories] = useState(categories)
+  if (categories !== seenCategories) {
+    setSeenCategories(categories)
+    if (categoryId && !categories.some((c) => c.id === categoryId)) {
+      setCategoryId('')
+    }
+  }
+
+  const handleCategorySelect = (e) => {
+    if (e.target.value === ADD_CATEGORY_VALUE) {
+      setAddingCategory(true)
+      return
+    }
+    setCategoryId(e.target.value)
+  }
+
+  const handleAddCategory = async () => {
+    const name = newCategoryName.trim()
+    if (!name) return
+
+    setCategorySaving(true)
+    setMessage('')
+    try {
+      const category = await createCategory(userId, name, categories.length)
+      onCategoryCreated(category)
+      setCategoryId(category.id)
+      setAddingCategory(false)
+      setNewCategoryName('')
+    } catch (error) {
+      setMessage(friendlyErrorMessage(error))
+    } finally {
+      setCategorySaving(false)
+    }
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -72,6 +124,7 @@ export default function TaskForm({ userId, onCreated }) {
       user_id: userId,
       title: title.trim(),
       priority,
+      category_id: categoryId || null,
       due_date: isRecurring ? schedule?.due_date ?? null : dueDate || null,
       is_recurring: isRecurring,
       recurrence_rule: recurrenceRule,
@@ -90,6 +143,7 @@ export default function TaskForm({ userId, onCreated }) {
       onCreated(data)
       setTitle('')
       setPriority('medium')
+      setCategoryId('')
       setDueDate('')
       setIsRecurring(false)
       setRecurrence(DEFAULT_RECURRENCE)
@@ -117,6 +171,54 @@ export default function TaskForm({ userId, onCreated }) {
           <option value="medium">Medium</option>
           <option value="high">High</option>
         </select>
+
+        {addingCategory ? (
+          <div className="task-form-add-category">
+            <input
+              type="text"
+              placeholder="Category name"
+              value={newCategoryName}
+              onChange={(e) => setNewCategoryName(e.target.value)}
+              autoFocus
+            />
+            <button
+              type="button"
+              className="modal-secondary-button"
+              onClick={handleAddCategory}
+              disabled={!newCategoryName.trim() || categorySaving}
+            >
+              {categorySaving ? 'Adding...' : 'Add'}
+            </button>
+            <button
+              type="button"
+              className="modal-secondary-button"
+              onClick={() => {
+                setAddingCategory(false)
+                setNewCategoryName('')
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <select value={categoryId} onChange={handleCategorySelect}>
+            <option value="">No category</option>
+            {categories.map((category) => (
+              <option key={category.id} value={category.id}>
+                {category.name}
+              </option>
+            ))}
+            {categories.length < MAX_CATEGORIES && (
+              <option value={ADD_CATEGORY_VALUE}>+ Add custom category...</option>
+            )}
+          </select>
+        )}
+
+        <ManageCategories
+          categories={categories}
+          onDeleted={onCategoryDeleted}
+          onRecolored={onCategoryRecolored}
+        />
 
         {!(isRecurring && recurrence.type === 'custom_dates') && (
           <input

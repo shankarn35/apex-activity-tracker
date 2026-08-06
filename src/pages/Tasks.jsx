@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../supabaseClient'
 import { advanceDate, today } from '../lib/recurrence'
 import { fetchOccurrenceDates } from '../lib/occurrences'
+import { fetchCategories } from '../lib/categories'
 import { friendlyErrorMessage } from '../lib/errors'
 import TaskForm from '../components/TaskForm'
 import TaskItem from '../components/TaskItem'
@@ -45,6 +46,7 @@ export default function Tasks({ session }) {
   const [endDatePromptMode, setEndDatePromptMode] = useState(null)
   const [showPriority, setShowPriority] = useState(readStoredShowPriority)
   const [lastCompletedItem, setLastCompletedItem] = useState(null)
+  const [categories, setCategories] = useState([])
 
   const toggleShowPriority = () => {
     setShowPriority((prev) => {
@@ -92,6 +94,36 @@ export default function Tasks({ session }) {
     }
   }, [session.user.id])
 
+  useEffect(() => {
+    let cancelled = false
+
+    fetchCategories(session.user.id)
+      .then((data) => {
+        if (!cancelled) setCategories(data)
+      })
+      .catch((err) => {
+        if (!cancelled) setError(friendlyErrorMessage(err))
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [session.user.id])
+
+  const handleCategoryCreated = (category) => {
+    setCategories((prev) => [...prev, category])
+  }
+
+  const handleCategoryDeleted = (categoryId) => {
+    setCategories((prev) => prev.filter((c) => c.id !== categoryId))
+  }
+
+  const handleCategoryRecolored = (updatedCategory) => {
+    setCategories((prev) =>
+      prev.map((c) => (c.id === updatedCategory.id ? updatedCategory : c))
+    )
+  }
+
   const handleCreated = (task) => {
     setTasks((prev) => sortByDueDate([...prev, task]))
   }
@@ -124,6 +156,7 @@ export default function Tasks({ session }) {
           occurrence_date: task.due_date,
           title: task.title,
           priority: task.priority,
+          category_id: task.category_id,
           completed: true,
           completed_at: completedAt,
           is_recurring: false,
@@ -240,7 +273,14 @@ export default function Tasks({ session }) {
         </label>
       </div>
 
-      <TaskForm userId={session.user.id} onCreated={handleCreated} />
+      <TaskForm
+        userId={session.user.id}
+        onCreated={handleCreated}
+        categories={categories}
+        onCategoryCreated={handleCategoryCreated}
+        onCategoryDeleted={handleCategoryDeleted}
+        onCategoryRecolored={handleCategoryRecolored}
+      />
 
       {error && <p className="task-form-message">{error}</p>}
 
@@ -257,6 +297,7 @@ export default function Tasks({ session }) {
               onComplete={handleComplete}
               onEditRecurrence={setEditingTask}
               showPriority={showPriority}
+              categories={categories}
             />
           ))}
         </ul>
@@ -268,6 +309,7 @@ export default function Tasks({ session }) {
         onToggleShowPriority={toggleShowPriority}
         onUncomplete={handleUncomplete}
         newlyCompletedItem={lastCompletedItem}
+        categories={categories}
       />
 
       {editingTask && (
