@@ -65,7 +65,10 @@ Before ending a session, confirm with the user:
 ### git push investigation (2026-08-03 update)
 The two earlier apparent `git push` "hangs" in this session were traced to a missed "Allow once" permission prompt in the terminal — not a network, credential, or proxy issue as originally suspected. When the prompt is answered promptly, `git push` completes normally within seconds.
 
-Going forward: keep the 30-second cap on any push attempt, and if it's approaching that cap, explicitly check whether a permission prompt is sitting unanswered before assuming it's a genuine stall. Keep the standing convention (user pushes manually, Claude reports when a commit is ready) in place for a few more sessions to confirm this is fully resolved before revisiting letting Claude push directly again.
+Keep the 30-second cap on any push attempt, and if it's approaching that cap, explicitly check whether a permission prompt is sitting unanswered before assuming it's a genuine stall.
+
+### git push convention (2026-08-06 update)
+The underlying issue above is considered resolved. Claude may run `git push` again (no longer restricted to the user pushing manually) — but must ask for the user's confirmation before each push rather than pushing automatically once a commit is ready. Once confirmed, push with the 30-second cap as described above.
 
 ### Blocked commands
 
