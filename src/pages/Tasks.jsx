@@ -20,9 +20,15 @@ function sortByDueDate(tasks) {
 }
 
 const SHOW_PRIORITY_STORAGE_KEY = 'showPriority'
+const SHOW_CATEGORY_STORAGE_KEY = 'showCategory'
 
 function readStoredShowPriority() {
   const stored = localStorage.getItem(SHOW_PRIORITY_STORAGE_KEY)
+  return stored === null ? true : stored === 'true'
+}
+
+function readStoredShowCategory() {
+  const stored = localStorage.getItem(SHOW_CATEGORY_STORAGE_KEY)
   return stored === null ? true : stored === 'true'
 }
 
@@ -45,6 +51,7 @@ export default function Tasks({ session }) {
   const [pendingEndDateTasks, setPendingEndDateTasks] = useState([])
   const [endDatePromptMode, setEndDatePromptMode] = useState(null)
   const [showPriority, setShowPriority] = useState(readStoredShowPriority)
+  const [showCategory, setShowCategory] = useState(readStoredShowCategory)
   const [lastCompletedItem, setLastCompletedItem] = useState(null)
   const [categories, setCategories] = useState([])
 
@@ -52,6 +59,14 @@ export default function Tasks({ session }) {
     setShowPriority((prev) => {
       const next = !prev
       localStorage.setItem(SHOW_PRIORITY_STORAGE_KEY, String(next))
+      return next
+    })
+  }
+
+  const toggleShowCategory = () => {
+    setShowCategory((prev) => {
+      const next = !prev
+      localStorage.setItem(SHOW_CATEGORY_STORAGE_KEY, String(next))
       return next
     })
   }
@@ -263,14 +278,6 @@ export default function Tasks({ session }) {
     <div className="page-placeholder tasks-page">
       <div className="tasks-page-header">
         <h2>Tasks</h2>
-        <label className="show-priority-toggle">
-          <input
-            type="checkbox"
-            checked={showPriority}
-            onChange={toggleShowPriority}
-          />
-          Show priority
-        </label>
       </div>
 
       <TaskForm
@@ -283,6 +290,25 @@ export default function Tasks({ session }) {
       />
 
       {error && <p className="task-form-message">{error}</p>}
+
+      <div className="tasks-page-toggles">
+        <label className="show-priority-toggle">
+          <input
+            type="checkbox"
+            checked={showPriority}
+            onChange={toggleShowPriority}
+          />
+          Show priority
+        </label>
+        <label className="show-priority-toggle">
+          <input
+            type="checkbox"
+            checked={showCategory}
+            onChange={toggleShowCategory}
+          />
+          Show category
+        </label>
+      </div>
 
       {loading ? (
         <p className="placeholder-note">Loading tasks...</p>
@@ -297,6 +323,7 @@ export default function Tasks({ session }) {
               onComplete={handleComplete}
               onEditRecurrence={setEditingTask}
               showPriority={showPriority}
+              showCategory={showCategory}
               categories={categories}
             />
           ))}
@@ -307,6 +334,8 @@ export default function Tasks({ session }) {
         userId={session.user.id}
         showPriority={showPriority}
         onToggleShowPriority={toggleShowPriority}
+        showCategory={showCategory}
+        onToggleShowCategory={toggleShowCategory}
         onUncomplete={handleUncomplete}
         newlyCompletedItem={lastCompletedItem}
         categories={categories}

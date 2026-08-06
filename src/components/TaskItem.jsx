@@ -8,6 +8,7 @@ export default function TaskItem({
   onComplete,
   onEditRecurrence,
   showPriority,
+  showCategory,
   categories,
 }) {
   const category = categories.find((c) => c.id === task.category_id)
@@ -88,7 +89,7 @@ export default function TaskItem({
 
       <span className="task-item-title">{task.title}</span>
 
-      {category && (
+      {showCategory && category && (
         <span
           className="task-item-category-badge"
           style={{

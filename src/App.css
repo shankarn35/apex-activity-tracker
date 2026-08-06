@@ -213,6 +213,14 @@
   margin-bottom: 20px;
 }
 
+.tasks-page-toggles {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
 .tasks-page-header h2 {
   margin-bottom: 0;
 }

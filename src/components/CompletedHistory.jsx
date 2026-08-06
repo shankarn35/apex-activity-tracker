@@ -42,6 +42,8 @@ export default function CompletedHistory({
   userId,
   showPriority,
   onToggleShowPriority,
+  showCategory,
+  onToggleShowCategory,
   onUncomplete,
   newlyCompletedItem,
   categories,
@@ -283,6 +285,14 @@ export default function CompletedHistory({
                   <label>
                     <input
                       type="checkbox"
+                      checked={showCategory}
+                      onChange={onToggleShowCategory}
+                    />
+                    Category
+                  </label>
+                  <label>
+                    <input
+                      type="checkbox"
                       checked={fields.dueDate}
                       onChange={() => toggleField('dueDate')}
                     />
@@ -330,7 +340,7 @@ export default function CompletedHistory({
                       </>
                     )}
                     <span className="task-item-title">{item.title}</span>
-                    {category && (
+                    {showCategory && category && (
                       <span
                         className="task-item-category-badge"
                         style={{
