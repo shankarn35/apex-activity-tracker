@@ -5,6 +5,7 @@ import { supabase } from '../supabaseClient'
 import { fetchRecurrenceActive } from '../lib/occurrences'
 import { categoryTint } from '../lib/categories'
 import { friendlyErrorMessage } from '../lib/errors'
+import InlineComment from './InlineComment'
 
 const FIELDS_STORAGE_KEY = 'completedHistoryFields'
 const DEFAULT_FIELDS = { dueDate: true, recurring: true }
@@ -32,9 +33,29 @@ function parseDateOnly(dateStr) {
   return new Date(`${dateStr}T00:00:00`)
 }
 
+// A completed row's activity timestamp is completed_at; a skipped row's is
+// skipped_at (its completed_at is always null) — this picks whichever the
+// row actually has, so sorting never calls localeCompare on a null.
+function activityTimestamp(item) {
+  return item.completed_at ?? item.skipped_at
+}
+
+// completed_at/skipped_at are pinned to noon of whichever (possibly
+// backdated) date the user picked, so same-day items tie exactly — break
+// ties with updated_at, which the DB bumps to the real action time on
+// every insert/update (tasks_set_updated_at trigger).
+function sortByActivityTimestamp(items) {
+  return [...items].sort((a, b) => {
+    const primary = activityTimestamp(b).localeCompare(activityTimestamp(a))
+    if (primary !== 0) return primary
+    return b.updated_at.localeCompare(a.updated_at)
+  })
+}
+
 const DEFAULT_VISIBLE_COUNT = 10
 
-const DEFAULT_UNDO_MESSAGE = 'Undo this completion?'
+const DEFAULT_UNDO_COMPLETE_MESSAGE = 'Undo this completion?'
+const DEFAULT_UNDO_SKIP_MESSAGE = 'Undo this skip?'
 const REACTIVATE_UNDO_MESSAGE =
   'This will also reactivate the recurring series (currently stopped). Continue?'
 
@@ -44,8 +65,13 @@ export default function CompletedHistory({
   onToggleShowPriority,
   showCategory,
   onToggleShowCategory,
+  showSkipped,
+  onToggleShowSkipped,
+  showCompleted,
+  onToggleShowCompleted,
   onUncomplete,
   newlyCompletedItem,
+  newlySkippedItem,
   categories,
 }) {
   const [expanded, setExpanded] = useState(false)
@@ -59,7 +85,7 @@ export default function CompletedHistory({
   const [showAll, setShowAll] = useState(false)
 
   const [undoTarget, setUndoTarget] = useState(null)
-  const [undoMessage, setUndoMessage] = useState(DEFAULT_UNDO_MESSAGE)
+  const [undoMessage, setUndoMessage] = useState(DEFAULT_UNDO_COMPLETE_MESSAGE)
   const [undoChecking, setUndoChecking] = useState(false)
   const [undoSubmitting, setUndoSubmitting] = useState(false)
   const undoPopoverRef = useRef(null)
@@ -73,20 +99,24 @@ export default function CompletedHistory({
       setLoading(true)
       setError('')
 
+      // completed rows are scoped by completed_at, skipped rows by
+      // skipped_at — a plain .gte('completed_at', ...) would silently
+      // exclude every skipped row, since completed_at is null on those.
       const { data, error } = await supabase
         .from('tasks')
         .select('*')
         .eq('user_id', userId)
-        .eq('completed', true)
-        .gte('completed_at', `${fromDate}T00:00:00`)
-        .order('completed_at', { ascending: false })
+        .or(
+          `and(completed.eq.true,completed_at.gte.${fromDate}T00:00:00),` +
+            `and(is_skipped.eq.true,skipped_at.gte.${fromDate}T00:00:00)`
+        )
 
       if (cancelled) return
 
       if (error) {
         setError(friendlyErrorMessage(error))
       } else {
-        setItems(data)
+        setItems(sortByActivityTimestamp(data))
       }
       setLoading(false)
     }
@@ -101,9 +131,15 @@ export default function CompletedHistory({
   if (newlyCompletedItem && newlyCompletedItem !== seenCompletedItem) {
     setSeenCompletedItem(newlyCompletedItem)
     if (newlyCompletedItem.completed_at >= `${fromDate}T00:00:00`) {
-      setItems((prev) =>
-        [...prev, newlyCompletedItem].sort((a, b) => b.completed_at.localeCompare(a.completed_at))
-      )
+      setItems((prev) => sortByActivityTimestamp([...prev, newlyCompletedItem]))
+    }
+  }
+
+  const [seenSkippedItem, setSeenSkippedItem] = useState(newlySkippedItem)
+  if (newlySkippedItem && newlySkippedItem !== seenSkippedItem) {
+    setSeenSkippedItem(newlySkippedItem)
+    if (newlySkippedItem.skipped_at >= `${fromDate}T00:00:00`) {
+      setItems((prev) => sortByActivityTimestamp([...prev, newlySkippedItem]))
     }
   }
 
@@ -133,6 +169,21 @@ export default function CompletedHistory({
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [undoTarget])
 
+  const handleCommentUpdate = async (itemId, newComment) => {
+    const { data, error } = await supabase
+      .from('tasks')
+      .update({ comment: newComment })
+      .eq('id', itemId)
+      .select()
+      .single()
+
+    if (error) {
+      throw new Error(friendlyErrorMessage(error))
+    }
+
+    setItems((prev) => prev.map((i) => (i.id === itemId ? data : i)))
+  }
+
   const toggleField = (key) => {
     setFields((prev) => {
       const next = { ...prev, [key]: !prev[key] }
@@ -144,7 +195,7 @@ export default function CompletedHistory({
   const openUndoConfirm = async (item) => {
     setError('')
     setUndoTarget(item)
-    setUndoMessage(DEFAULT_UNDO_MESSAGE)
+    setUndoMessage(item.is_skipped ? DEFAULT_UNDO_SKIP_MESSAGE : DEFAULT_UNDO_COMPLETE_MESSAGE)
 
     if (!item.parent_task_id) return
 
@@ -171,9 +222,13 @@ export default function CompletedHistory({
       let restoredTask
 
       if (!item.parent_task_id) {
+        const statusReset = item.is_skipped
+          ? { is_skipped: false, skipped_at: null }
+          : { completed: false, completed_at: null }
+
         const { data, error } = await supabase
           .from('tasks')
-          .update({ completed: false, completed_at: null })
+          .update(statusReset)
           .eq('id', item.id)
           .select()
           .single()
@@ -225,6 +280,10 @@ export default function CompletedHistory({
     }
   }
 
+  // Client-side filter on the already-fetched items — toggling either
+  // checkbox never triggers a new query, it just changes what's rendered.
+  const visibleItems = items.filter((i) => (i.is_skipped ? showSkipped : showCompleted))
+
   return (
     <div className="completed-history">
       <button
@@ -249,7 +308,7 @@ export default function CompletedHistory({
                 />
               </label>
 
-              {items.length > DEFAULT_VISIBLE_COUNT && (
+              {visibleItems.length > DEFAULT_VISIBLE_COUNT && (
                 <label className="show-all-toggle">
                   <input
                     type="checkbox"
@@ -306,6 +365,22 @@ export default function CompletedHistory({
                     />
                     Recurring / one-time
                   </label>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={showSkipped}
+                      onChange={onToggleShowSkipped}
+                    />
+                    Show skipped
+                  </label>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={showCompleted}
+                      onChange={onToggleShowCompleted}
+                    />
+                    Show completed
+                  </label>
                 </div>
               )}
             </div>
@@ -315,20 +390,20 @@ export default function CompletedHistory({
 
           {loading ? (
             <p className="placeholder-note">Loading history...</p>
-          ) : items.length === 0 ? (
+          ) : visibleItems.length === 0 ? (
             <p className="placeholder-note">No completions in this range.</p>
           ) : (
             <>
-              {items.length > DEFAULT_VISIBLE_COUNT && (
+              {visibleItems.length > DEFAULT_VISIBLE_COUNT && (
                 <p className="placeholder-note completed-history-count-note">
                   {showAll
-                    ? `Showing all ${items.length} (within ${format(parseDateOnly(fromDate), 'MMM d')} – today).`
-                    : `Showing ${DEFAULT_VISIBLE_COUNT} most recent (within ${format(parseDateOnly(fromDate), 'MMM d')} – today) — ${items.length - DEFAULT_VISIBLE_COUNT} more available.`}
+                    ? `Showing all ${visibleItems.length} (within ${format(parseDateOnly(fromDate), 'MMM d')} – today).`
+                    : `Showing ${DEFAULT_VISIBLE_COUNT} most recent (within ${format(parseDateOnly(fromDate), 'MMM d')} – today) — ${visibleItems.length - DEFAULT_VISIBLE_COUNT} more available.`}
                 </p>
               )}
 
               <ul className="task-list">
-              {(showAll ? items : items.slice(0, DEFAULT_VISIBLE_COUNT)).map((item) => {
+              {(showAll ? visibleItems : visibleItems.slice(0, DEFAULT_VISIBLE_COUNT)).map((item) => {
                 const dueLabel = item.due_date ?? item.occurrence_date
                 const category = categories.find((c) => c.id === item.category_id)
                 return (
@@ -340,6 +415,11 @@ export default function CompletedHistory({
                       </>
                     )}
                     <span className="task-item-title">{item.title}</span>
+                    {item.is_skipped ? (
+                      <span className="task-item-skip-badge">Skipped</span>
+                    ) : (
+                      <span className="task-item-completed-badge">Completed</span>
+                    )}
                     {showCategory && category && (
                       <span
                         className="task-item-category-badge"
@@ -363,7 +443,9 @@ export default function CompletedHistory({
                       </span>
                     )}
                     <span className="task-item-due-date">
-                      Completed {format(new Date(item.completed_at), 'MMM d, yyyy')}
+                      {item.is_skipped
+                        ? `Skipped ${format(new Date(item.skipped_at), 'MMM d, yyyy')}`
+                        : `Completed ${format(new Date(item.completed_at), 'MMM d, yyyy')}`}
                     </span>
 
                     <div className="task-item-undo-control">
@@ -403,6 +485,11 @@ export default function CompletedHistory({
                         </div>
                       )}
                     </div>
+
+                    <InlineComment
+                      value={item.comment}
+                      onSave={(newComment) => handleCommentUpdate(item.id, newComment)}
+                    />
                   </li>
                 )
               })}

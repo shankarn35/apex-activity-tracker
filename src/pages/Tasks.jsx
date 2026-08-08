@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabaseClient'
 import { advanceDate, today } from '../lib/recurrence'
-import { fetchOccurrenceDates } from '../lib/occurrences'
+import { fetchOccurrenceDates, fetchOccurrenceStatus, fetchTaskStatus } from '../lib/occurrences'
 import { fetchCategories } from '../lib/categories'
 import { friendlyErrorMessage } from '../lib/errors'
 import TaskForm from '../components/TaskForm'
@@ -21,6 +21,8 @@ function sortByDueDate(tasks) {
 
 const SHOW_PRIORITY_STORAGE_KEY = 'showPriority'
 const SHOW_CATEGORY_STORAGE_KEY = 'showCategory'
+const SHOW_SKIPPED_STORAGE_KEY = 'showSkipped'
+const SHOW_COMPLETED_STORAGE_KEY = 'showCompleted'
 
 function readStoredShowPriority() {
   const stored = localStorage.getItem(SHOW_PRIORITY_STORAGE_KEY)
@@ -30,6 +32,46 @@ function readStoredShowPriority() {
 function readStoredShowCategory() {
   const stored = localStorage.getItem(SHOW_CATEGORY_STORAGE_KEY)
   return stored === null ? true : stored === 'true'
+}
+
+function readStoredShowSkipped() {
+  const stored = localStorage.getItem(SHOW_SKIPPED_STORAGE_KEY)
+  return stored === null ? true : stored === 'true'
+}
+
+function readStoredShowCompleted() {
+  const stored = localStorage.getItem(SHOW_COMPLETED_STORAGE_KEY)
+  return stored === null ? true : stored === 'true'
+}
+
+// When an occurrence insert collides with unique_occurrence_per_template,
+// looks up the row already occupying that date so the error can name its
+// actual status (completed vs. skipped) instead of a generic message.
+async function occurrenceConflictMessage(err, templateId, occurrenceDate) {
+  const detail = `${err.message ?? ''} ${err.details ?? ''}`
+  if (err.code !== '23505' || !detail.includes('unique_occurrence_per_template')) {
+    return null
+  }
+
+  const existing = await fetchOccurrenceStatus(templateId, occurrenceDate)
+  if (existing?.completed) return 'This was already completed.'
+  if (existing?.is_skipped) return 'This was already marked Skip / Not Needed.'
+  return null
+}
+
+// Same idea as occurrenceConflictMessage, but for a standalone task update
+// that collides with completed_skipped_mutually_exclusive (e.g. the task
+// was skipped/completed in another tab since this one last loaded it).
+async function taskConflictMessage(err, taskId) {
+  const detail = `${err.message ?? ''} ${err.details ?? ''}`
+  if (err.code !== '23514' || !detail.includes('completed_skipped_mutually_exclusive')) {
+    return null
+  }
+
+  const existing = await fetchTaskStatus(taskId)
+  if (existing?.completed) return 'This was already completed.'
+  if (existing?.is_skipped) return 'This was already marked Skip / Not Needed.'
+  return null
 }
 
 function findEndDatePassedTasks(tasks) {
@@ -52,7 +94,10 @@ export default function Tasks({ session }) {
   const [endDatePromptMode, setEndDatePromptMode] = useState(null)
   const [showPriority, setShowPriority] = useState(readStoredShowPriority)
   const [showCategory, setShowCategory] = useState(readStoredShowCategory)
+  const [showSkipped, setShowSkipped] = useState(readStoredShowSkipped)
+  const [showCompleted, setShowCompleted] = useState(readStoredShowCompleted)
   const [lastCompletedItem, setLastCompletedItem] = useState(null)
+  const [lastSkippedItem, setLastSkippedItem] = useState(null)
   const [categories, setCategories] = useState([])
 
   const toggleShowPriority = () => {
@@ -71,6 +116,22 @@ export default function Tasks({ session }) {
     })
   }
 
+  const toggleShowSkipped = () => {
+    setShowSkipped((prev) => {
+      const next = !prev
+      localStorage.setItem(SHOW_SKIPPED_STORAGE_KEY, String(next))
+      return next
+    })
+  }
+
+  const toggleShowCompleted = () => {
+    setShowCompleted((prev) => {
+      const next = !prev
+      localStorage.setItem(SHOW_COMPLETED_STORAGE_KEY, String(next))
+      return next
+    })
+  }
+
   useEffect(() => {
     let cancelled = false
 
@@ -83,6 +144,7 @@ export default function Tasks({ session }) {
         .is('parent_task_id', null)
         .eq('recurrence_active', true)
         .eq('completed', false)
+        .eq('is_skipped', false)
 
       if (cancelled) return
 
@@ -143,7 +205,7 @@ export default function Tasks({ session }) {
     setTasks((prev) => sortByDueDate([...prev, task]))
   }
 
-  const handleComplete = async (task, completedOnDate) => {
+  const handleComplete = async (task, completedOnDate, comment) => {
     setError('')
     const completedAt = new Date(`${completedOnDate}T12:00:00`).toISOString()
 
@@ -151,37 +213,140 @@ export default function Tasks({ session }) {
       if (!task.is_recurring) {
         const { data, error } = await supabase
           .from('tasks')
-          .update({ completed: true, completed_at: completedAt })
+          .update({ completed: true, completed_at: completedAt, comment: comment || null })
           .eq('id', task.id)
           .select()
           .single()
 
-        if (error) throw error
+        if (error) {
+          const conflictMessage = await taskConflictMessage(error, task.id)
+          setError(conflictMessage ?? friendlyErrorMessage(error))
+          return
+        }
 
         setTasks((prev) => prev.filter((t) => t.id !== task.id))
         setLastCompletedItem(data)
         return
       }
 
-      const { data: occurrence, error: occurrenceError } = await supabase
+      let occurrence
+      try {
+        const { data, error } = await supabase
+          .from('tasks')
+          .insert({
+            user_id: task.user_id,
+            parent_task_id: task.id,
+            occurrence_date: task.due_date,
+            title: task.title,
+            priority: task.priority,
+            category_id: task.category_id,
+            completed: true,
+            completed_at: completedAt,
+            comment: comment || null,
+            is_recurring: false,
+          })
+          .select()
+          .single()
+
+        if (error) throw error
+        occurrence = data
+      } catch (insertErr) {
+        const conflictMessage = await occurrenceConflictMessage(
+          insertErr,
+          task.id,
+          task.due_date
+        )
+        setError(conflictMessage ?? friendlyErrorMessage(insertErr))
+        return
+      }
+
+      setLastCompletedItem(occurrence)
+
+      const excludedDates = await fetchOccurrenceDates(task.id)
+      const nextDueDate = advanceDate(
+        task.due_date,
+        task.recurrence_rule,
+        task.recurrence_start_date,
+        excludedDates
+      )
+
+      const { data: updatedTemplate, error: templateError } = await supabase
         .from('tasks')
-        .insert({
-          user_id: task.user_id,
-          parent_task_id: task.id,
-          occurrence_date: task.due_date,
-          title: task.title,
-          priority: task.priority,
-          category_id: task.category_id,
-          completed: true,
-          completed_at: completedAt,
-          is_recurring: false,
+        .update({
+          due_date: nextDueDate,
+          recurrence_active: nextDueDate !== null,
         })
+        .eq('id', task.id)
         .select()
         .single()
 
-      if (occurrenceError) throw occurrenceError
+      if (templateError) throw templateError
 
-      setLastCompletedItem(occurrence)
+      setTasks((prev) => {
+        const next = nextDueDate === null
+          ? prev.filter((t) => t.id !== task.id)
+          : prev.map((t) => (t.id === task.id ? updatedTemplate : t))
+        return sortByDueDate(next)
+      })
+    } catch (err) {
+      setError(friendlyErrorMessage(err))
+    }
+  }
+
+  const handleSkip = async (task, skippedOnDate, comment) => {
+    setError('')
+    const skippedAt = new Date(`${skippedOnDate}T12:00:00`).toISOString()
+
+    try {
+      if (!task.is_recurring) {
+        const { data, error } = await supabase
+          .from('tasks')
+          .update({ is_skipped: true, skipped_at: skippedAt, comment: comment || null })
+          .eq('id', task.id)
+          .select()
+          .single()
+
+        if (error) {
+          const conflictMessage = await taskConflictMessage(error, task.id)
+          setError(conflictMessage ?? friendlyErrorMessage(error))
+          return
+        }
+
+        setTasks((prev) => prev.filter((t) => t.id !== task.id))
+        setLastSkippedItem(data)
+        return
+      }
+
+      try {
+        const { data, error } = await supabase
+          .from('tasks')
+          .insert({
+            user_id: task.user_id,
+            parent_task_id: task.id,
+            occurrence_date: task.due_date,
+            title: task.title,
+            priority: task.priority,
+            category_id: task.category_id,
+            completed: false,
+            is_skipped: true,
+            skipped_at: skippedAt,
+            comment: comment || null,
+            is_recurring: false,
+          })
+          .select()
+          .single()
+
+        if (error) throw error
+        setLastSkippedItem(data)
+      } catch (insertErr) {
+        const conflictMessage = await occurrenceConflictMessage(
+          insertErr,
+          task.id,
+          task.due_date
+        )
+        setError(conflictMessage ?? friendlyErrorMessage(insertErr))
+        return
+      }
 
       const excludedDates = await fetchOccurrenceDates(task.id)
       const nextDueDate = advanceDate(
@@ -321,6 +486,7 @@ export default function Tasks({ session }) {
               key={task.id}
               task={task}
               onComplete={handleComplete}
+              onSkip={handleSkip}
               onEditRecurrence={setEditingTask}
               showPriority={showPriority}
               showCategory={showCategory}
@@ -336,8 +502,13 @@ export default function Tasks({ session }) {
         onToggleShowPriority={toggleShowPriority}
         showCategory={showCategory}
         onToggleShowCategory={toggleShowCategory}
+        showSkipped={showSkipped}
+        onToggleShowSkipped={toggleShowSkipped}
+        showCompleted={showCompleted}
+        onToggleShowCompleted={toggleShowCompleted}
         onUncomplete={handleUncomplete}
         newlyCompletedItem={lastCompletedItem}
+        newlySkippedItem={lastSkippedItem}
         categories={categories}
       />
 

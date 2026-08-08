@@ -14,6 +14,8 @@
   --color-priority-low: #22c55e;
   --color-priority-medium: #f59e0b;
   --color-priority-high: #ef4444;
+  --color-complete: #10b981;
+  --color-skip: #eab308;
   --color-overlay: rgba(15, 15, 20, 0.7);
 }
 
@@ -33,6 +35,8 @@
   --color-priority-low: #16a34a;
   --color-priority-medium: #d97706;
   --color-priority-high: #dc2626;
+  --color-complete: #059669;
+  --color-skip: #ca8a04;
   --color-overlay: rgba(24, 24, 27, 0.4);
 }
 
