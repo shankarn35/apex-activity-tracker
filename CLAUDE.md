@@ -47,6 +47,15 @@ When adding a constraint that protects a shared/reusable resource across multipl
 
 This is distinct from **per-row format details** (e.g. the `custom_dates` recurrence type's 20-date cap on a single row's own jsonb array) — those can stay app-level only, since they don't involve counting across rows or protecting a resource other rows depend on.
 
+## Planning and review conventions
+
+- Show the plan and wait for approval before writing code, creating files, or running migrations — at the whole-plan level.
+- Describe plans and changes in plain English, not full code diffs, unless a diff is specifically requested.
+- Always run BOTH the dev build check AND `npm run lint` before saying anything is ready to test — report both results explicitly.
+- When a fix touches a changed assumption (e.g. "this field is never null"), search the whole codebase for every place making the same assumption before proposing a fix — don't just patch the one spot that surfaced the bug.
+- Flag any logic running directly during render (not in `useEffect` or an event handler) as higher-risk, since it can crash the whole page with no error boundary to catch it.
+- When wrapping sibling routes/components in the same reusable wrapper component, give each instance a distinct `key` tied to what it wraps — otherwise React may reuse component state across what should be independent instances.
+
 ## Commit conventions
 - After each individually-tested feature, propose a commit to the user — never batch multiple untested features into one commit, and never commit until the user approves.
 - Prefix commit messages by type: feat:, fix:, refactor:, chore:, docs:
