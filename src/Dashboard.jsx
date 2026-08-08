@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { supabase } from './supabaseClient'
 import NavBar from './NavBar'
+import ErrorBoundary from './components/ErrorBoundary'
 import Tasks from './pages/Tasks'
 import Calendar from './pages/Calendar'
 import Bills from './pages/Bills'
@@ -27,10 +28,38 @@ export default function Dashboard({ session }) {
 
         <Routes>
           <Route path="/" element={<Navigate to="/tasks" replace />} />
-          <Route path="/tasks" element={<Tasks session={session} />} />
-          <Route path="/calendar" element={<Calendar />} />
-          <Route path="/bills" element={<Bills />} />
-          <Route path="/hobbies" element={<Hobbies />} />
+          <Route
+            path="/tasks"
+            element={
+              <ErrorBoundary key="tasks">
+                <Tasks session={session} />
+              </ErrorBoundary>
+            }
+          />
+          <Route
+            path="/calendar"
+            element={
+              <ErrorBoundary key="calendar">
+                <Calendar />
+              </ErrorBoundary>
+            }
+          />
+          <Route
+            path="/bills"
+            element={
+              <ErrorBoundary key="bills">
+                <Bills />
+              </ErrorBoundary>
+            }
+          />
+          <Route
+            path="/hobbies"
+            element={
+              <ErrorBoundary key="hobbies">
+                <Hobbies />
+              </ErrorBoundary>
+            }
+          />
           <Route path="*" element={<Navigate to="/tasks" replace />} />
         </Routes>
       </div>
