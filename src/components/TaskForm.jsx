@@ -82,7 +82,7 @@ export default function TaskForm({
     setCategorySaving(true)
     setMessage('')
     try {
-      const category = await createCategory(userId, name, categories.length)
+      const category = await createCategory(userId, name)
       onCategoryCreated(category)
       setCategoryId(category.id)
       setAddingCategory(false)

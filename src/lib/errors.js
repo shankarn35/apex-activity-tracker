@@ -6,13 +6,16 @@ export function friendlyErrorMessage(error) {
   const detail = `${error.message ?? ''} ${error.details ?? ''}`
 
   if (detail.includes('Category limit reached')) {
-    return "You've reached the 10-category limit."
+    return "You've reached the 9-category limit."
   }
   if (error.code === '23505' && detail.includes('unique_occurrence_per_template')) {
     return 'This date already has a completed entry for this task — pick a different date.'
   }
   if (error.code === '23505' && detail.includes('categories_name_unique_per_user')) {
     return 'You already have a category with that name.'
+  }
+  if (error.code === '23505' && detail.includes('unique_category_color_per_user')) {
+    return 'That color was just taken by another category — please try adding it again.'
   }
   if (error.code === '23505') {
     return 'That change conflicts with an existing record. Please try a different value.'
